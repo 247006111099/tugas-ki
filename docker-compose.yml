@@ -1,0 +1,42 @@
+# Jalankan: docker compose up --build
+# Hanya gateway (3000) yang dipublikasikan ke host. Service 3001/3002 hanya bisa dicapai
+# dari jaringan internal compose, jadi tidak bisa diakses langsung dari luar.
+x-env: &env
+  DB_PATH: /data/app.db
+  GATEWAY_URL: http://gateway:3000
+  NILAI_URL: http://nilai:3001
+  TRANSKRIP_URL: http://transkrip:3002
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-ganti-di-produksi}
+  GATEWAY_SECRET: ${GATEWAY_SECRET:-dev-gateway-secret-ganti-di-produksi}
+  ACCESS_START: ${ACCESS_START:-07:00}
+  ACCESS_END: ${ACCESS_END:-21:00}
+  ACCESS_TZ: ${ACCESS_TZ:-Asia/Jakarta}
+
+services:
+  seed:
+    build: .
+    command: node scripts/seed.js --if-empty
+    environment: *env
+    volumes: [dbdata:/data]
+  transkrip:
+    build: .
+    command: node services/transkrip/index.js
+    environment: *env
+    volumes: [dbdata:/data]
+    depends_on: { seed: { condition: service_completed_successfully } }
+  nilai:
+    build: .
+    command: node services/nilai/index.js
+    environment: *env
+    volumes: [dbdata:/data]
+    depends_on: { seed: { condition: service_completed_successfully } }
+  gateway:
+    build: .
+    command: node gateway/index.js
+    environment: *env
+    volumes: [dbdata:/data]
+    ports: ["3000:3000"]
+    depends_on: [nilai, transkrip]
+
+volumes:
+  dbdata:
